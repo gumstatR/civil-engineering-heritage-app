@@ -5,51 +5,85 @@ import pandas as pd
 import pydeck as pdk
 
 st.title("土木遺産Webアプリ")
-st.markdown("このWebアプリは作成中です〜2001年まで。")
+st.markdown("このWebアプリは作成中です。")
 df=pd.read_csv("dobokuisan.csv",encoding="utf-8")   #読み込み
 
 # 表示したい順番でリストを作る
-col = ["対象構造物", "所在地", "竣工年", "受賞理由","北緯","東経","施設1","施設2","施設3","施設4","施設5"]
+col = ["対象構造物", "都道府県","市町村",  "竣工年", "受賞理由","北緯","東経","施設1","施設2","施設3","施設4","施設5"]
 df=df[col]
 
-# サイドバーで表示する列を選択させる
-st.sidebar.header("表示設定")
-all_columns = df.columns.tolist()
-    
-selected_columns = st.sidebar.multiselect(
-    "表示したい項目を選択してください",
-     all_columns,
-        default=all_columns[:3]  # 最初は左から◯番目の列だけ表示しておく設定
-    )
+st.subheader("🔍土木遺産検索")
+# 1行を2つのカラムに分ける（都道府県とキーワード）
+col1, col2 = st.columns(2)
+with col1:
+    # 1. 地方と都道府県のグループ分け（辞書）
+    region_map = {
+        "北海道・東北": ["北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県"],
+        "関東": ["茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県"],
+        "中部": ["新潟県", "富山県", "石川県", "福井県", "山梨県", "長野県", "岐阜県", "静岡県", "愛知県"],
+        "近畿": ["三重県", "滋賀県", "京都府", "大阪府", "兵庫県", "奈良県", "和歌山県"],
+        "中国・四国": ["鳥取県", "島根県", "岡山県", "広島県", "山口県", "徳島県", "香川県", "愛媛県", "高知県"],
+        "九州・沖縄": ["福岡県", "佐賀県", "長崎県", "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県"]
+    }
 
-    # 選択された列に基づいてデータを表示
-def new_func():
-    st.subheader("土木遺産一覧")
+    # 2. まず「地方」を選んでもらう
+    selected_region = st.selectbox("① 地方を選択", ["すべて"] + list(region_map.keys()))
 
-if selected_columns:
-    new_func()
-    # 選択された列だけを抽出して表示
-    st.dataframe(df[selected_columns], hide_index=True, use_container_width=True,)
-    # その順番でデータを抽出して表示
-       
+    # 3. 地方に応じて「都道府県」の選択肢を切り替える
+    if selected_region != "すべて":
+        # 選んだ地方に属する県だけをリストにする
+        prefs_in_region = region_map[selected_region]
+        target_pref = st.selectbox("② 都道府県を選択", ["すべて"] + prefs_in_region)
+    else:
+        # 「すべて」の場合は全件から選べるようにする（以前と同じ）
+        all_prefs = sorted([p for p in df["都道府県"].unique() if isinstance(p, str)])
+        target_pref = st.selectbox("② 都道府県を選択", ["すべて"] + all_prefs)
+
+
+
+
+
+
+with col2:
+    search_query = st.text_input("キーワードを入力（名称や受賞理由など）", "")
+
+# --- 検索処理 ---
+search_df = df.copy()
+
+if target_pref != "すべて":
+    search_df = search_df[search_df["都道府県"] == target_pref]
+
+if search_query:
+    search_df = search_df[
+        search_df["対象構造物"].str.contains(search_query, case=False, na=False) |
+        search_df["受賞理由"].str.contains(search_query, case=False, na=False)
+    ]
+
+st.write(f"検索結果: {len(search_df)} 件")
+
+display_cols = ["対象構造物", "都道府県", "市町村", "竣工年", "受賞理由"] 
+
+if not search_df.empty:
+    # 検索で見つかったデータだけを表示
+    st.dataframe(search_df[display_cols], hide_index=True, use_container_width=True)
 else:
-        st.error("表示する項目を左のサイドバーから選んでください。")
+    st.info("該当する土木遺産が見つかりませんでした。")
 
 
 
 
-map_df = df.rename(columns={'北緯': 'lat', '東経': 'lon'}) 
+map_df = search_df.rename(columns={'北緯': 'lat', '東経': 'lon'})
 map_df = map_df.dropna(subset=['lat', 'lon']) #座標のない行を削除 
-#map_df
 
-st.subheader("土木遺産マップ")
-st.pydeck_chart(pdk.Deck(
-    initial_view_state=pdk.ViewState(
-        latitude=map_df["lat"].mean(),
-        longitude=map_df["lon"].mean(),
-        zoom=5,
-        pitch=0,
-    ),
+if not map_df.empty:
+    st.subheader("土木遺産マップ")
+    st.pydeck_chart(pdk.Deck(
+        initial_view_state=pdk.ViewState(
+            latitude=map_df["lat"].mean(), # データがある時だけ平均を計算
+            longitude=map_df["lon"].mean(),
+            zoom=5,
+            pitch=0,
+        ),
     layers=[
         pdk.Layer(
             "ScatterplotLayer",
@@ -63,7 +97,7 @@ st.pydeck_chart(pdk.Deck(
         ),
     ],
     tooltip={
-        "html": "<b>遺産名:</b> {対象構造物}<br/><b>所在地:</b> {所在地}",
+        "html": "<b>遺産名:</b> {対象構造物}<br/><b>所在地:</b> {都道府県}",
         "style": {"color": "white"}
     }
 ))
