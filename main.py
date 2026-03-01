@@ -5,11 +5,11 @@ import pandas as pd
 import pydeck as pdk
 
 st.title("土木遺産Webアプリ")
-st.markdown("このWebアプリは作成中です。")
+st.markdown("土木学会選奨土木遺産を扱います。※このWebアプリは作成中です。")
 df=pd.read_csv("dobokuisan.csv",encoding="utf-8")   #読み込み
 
 # 表示したい順番でリストを作る
-col = ["対象構造物", "都道府県","市町村",  "竣工年", "受賞理由","北緯","東経","施設1","施設2","施設3","施設4","施設5"]
+col = ["対象構造物", "都道府県","市町村",  "竣工年", "受賞理由","北緯","東経","施設1","施設2","施設3","施設4","施設5","選奨年度"]
 df=df[col]
 
 st.subheader("🔍土木遺産検索")
@@ -27,21 +27,17 @@ with col1:
     }
 
     # 2. まず「地方」を選んでもらう
-    selected_region = st.selectbox("① 地方を選択", ["すべて"] + list(region_map.keys()))
+    selected_region = st.selectbox("地方で絞り込み", ["すべて"] + list(region_map.keys()))
 
     # 3. 地方に応じて「都道府県」の選択肢を切り替える
     if selected_region != "すべて":
         # 選んだ地方に属する県だけをリストにする
         prefs_in_region = region_map[selected_region]
-        target_pref = st.selectbox("② 都道府県を選択", ["すべて"] + prefs_in_region)
+        target_pref = st.selectbox("都道府県を選択", ["すべて"] + prefs_in_region)
     else:
         # 「すべて」の場合は全件から選べるようにする（以前と同じ）
         all_prefs = sorted([p for p in df["都道府県"].unique() if isinstance(p, str)])
-        target_pref = st.selectbox("② 都道府県を選択", ["すべて"] + all_prefs)
-
-
-
-
+        target_pref = st.selectbox("都道府県を選択", ["すべて"] + all_prefs)
 
 
 with col2:
@@ -49,7 +45,12 @@ with col2:
 
 # --- 検索処理 ---
 search_df = df.copy()
+# 1. 地方で絞り込み（都道府県が「すべて」でも、地方が選ばれていれば絞り込む）
+if selected_region != "すべて":
+    prefs_in_selected_region = region_map[selected_region]
+    search_df = search_df[search_df["都道府県"].isin(prefs_in_selected_region)]
 
+# 2. さらに都道府県で絞り込み（個別の県が選ばれた場合）
 if target_pref != "すべて":
     search_df = search_df[search_df["都道府県"] == target_pref]
 
@@ -77,6 +78,7 @@ map_df = map_df.dropna(subset=['lat', 'lon']) #座標のない行を削除
 
 if not map_df.empty:
     st.subheader("土木遺産マップ")
+    st.markdown("作成中・・・気が遠くなる作業")
     st.pydeck_chart(pdk.Deck(
         initial_view_state=pdk.ViewState(
             latitude=map_df["lat"].mean(), # データがある時だけ平均を計算
@@ -97,12 +99,45 @@ if not map_df.empty:
         ),
     ],
     tooltip={
-        "html": "<b>遺産名:</b> {対象構造物}<br/><b>所在地:</b> {都道府県}",
+        "html": "<b>名称:</b> {対象構造物}<br/><b>所在地:</b> {都道府県}",
         "style": {"color": "white"}
     }
 ))
 
 
+# --- グラフセクション ---
+st.subheader("📊 認定件数（年度別・累計）")
+
+if not search_df.empty:
+    graph_df = search_df.copy()
+    graph_df["選奨年度"] = pd.to_numeric(graph_df["選奨年度"], errors='coerce')
+    
+    # 1. 年度ごとに集計して並べ替える
+    trend_data = graph_df.groupby("選奨年度").size().reset_index(name="件数")
+    trend_data = trend_data.sort_values("選奨年度")
+
+    # 2. 累積（これまでの合計）を計算する列を追加
+    trend_data["累計件数"] = trend_data["件数"].cumsum()
+
+    # 3. グラフを2つ並べる
+    col_g1, col_g2 = st.columns(2)
+    
+    with col_g1:
+        st.write(" 各年度の認定件数")
+        st.bar_chart(trend_data.set_index("選奨年度")["件数"])
+        
+    with col_g2:
+        st.write(" 認定件数の累積")
+        st.bar_chart(trend_data.set_index("選奨年度")["累計件数"])
+
+
+
+
+# --- リンク集（アプリの一番最後に追加） ---
+st.divider() # 区切り線を入れるとプロっぽくなります
+st.markdown("### 🔗 関連リンク")
+st.markdown("[土木学会 選奨土木遺産 公式サイト](https://www.jsce.or.jp/contents/isan/)")
+st.markdown("[土木学会 選奨土木遺産選考委員会 公式サイト](http://committees.jsce.or.jp/heritage/)")
 
 
 # text=st.text_input("あなたの趣味を教えてください")
