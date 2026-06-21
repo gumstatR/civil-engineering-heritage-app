@@ -140,17 +140,9 @@ st.markdown("[土木学会 選奨土木遺産 公式サイト](https://www.jsce.
 st.markdown("[土木学会 選奨土木遺産選考委員会 公式サイト](http://committees.jsce.or.jp/heritage/)")
 
 
-# text=st.text_input("あなたの趣味を教えてください")
-# "あなたの趣味は",text
 
 
-# condition=st.slider("あなたの今の調子は？",0,100,50)
-# "あなたのコンディションは：",condition
-# if condition>80:
-#     st.write("VERY GOOD!")
 
-# else:"頑張って！"
-                 
 
 
 # st.write("Display Image")
